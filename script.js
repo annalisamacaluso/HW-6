@@ -1,31 +1,115 @@
-var apiKey = "166a433c57516f51dfab1f7edaed8413";
-​
-//var queryURL = "http://api.openweathermap.org/data/2.5/forecast?id=524901&APPID=" + apiKey;
-​
-​
-​
-​
-$("#search").val()
-​
-$("button").on("click", function(event){
-    event.preventDefault();
-    var city = $("#search").val()
-​
-    var queryURL = "http://api.openweathermap.org/data/2.5/weather?q=" + city + "&APPID=" + apiKey;
-    console.log(queryURL)
-    
+$(document).ready(function() {
+  $("#search-button").on("click", function() {
+    const searchValue = $("#search-value").val();
+
+    $("#search-value").val("");
+
+    searchWeather(searchValue);
+  });
+
+  $(".history").on("click", "li", function() {
+    searchWeather($(this).text());
+  });
+
+  function makeRow(text) {
+    const li = $("<li>").addClass("list-group-item list-group-item-action").text(text);
+    $(".history").append(li);
+  }
+
+  function searchWeather(searchValue) {
     $.ajax({
-        url: queryURL,
-        method: "GET"
-    }).then(function(response){
-        console.log(response)
-        var temp = response.main.temp;
-        var fTemp = (temp - 273.15) * 9/5 + 32;
-        console.log(fTemp)
-        
-        var tempDiv = $("<p>").text(`Temp: ${fTemp}˚F`);
+      type: "GET",
+      url: "http://api.openweathermap.org/data/2.5/weather?q=" + searchValue + "&appid=7ba67ac190f85fdba2e2dc6b9d32e93c&units=imperial",
+      dataType: "json",
+      success: function(data) {
+        if (history.indexOf(searchValue) === -1) {
+          history.push(searchValue);
+          window.localStorage.setItem("history", JSON.stringify(history));
     
-        var boxDiv = $("#box");
-        $("#box").append(tempDiv)
-    })
-})
+          makeRow(searchValue);
+        }
+        
+        $("#today").empty();
+
+        const title = $("<h3>").addClass("card-title").text(data.name + " (" + new Date().toLocaleDateString() + ")");
+        const card = $("<div>").addClass("card");
+        const wind = $("<p>").addClass("card-text").text("Wind Speed: " + data.wind.speed + " MPH");
+        const humid = $("<p>").addClass("card-text").text("Humidity: " + data.main.humidity + "%");
+        const temp = $("<p>").addClass("card-text").text("Temperature: " + data.main.temp + " °F");
+        const cardBody = $("<div>").addClass("card-body");
+        const img = $("<img>").attr("src", "http://openweathermap.org/img/w/" + data.weather[0].icon + ".png");
+
+        title.append(img);
+        cardBody.append(title, temp, humid, wind);
+        card.append(cardBody);
+        $("#today").append(card);
+
+        getForecast(searchValue);
+        getUVIndex(data.coord.lat, data.coord.lon);
+      }
+    });
+  }
+  
+  function getForecast(searchValue) {
+    $.ajax({
+      type: "GET",
+      url: "http://api.openweathermap.org/data/2.5/forecast?q=" + searchValue + "&appid=7ba67ac190f85fdba2e2dc6b9d32e93c&units=imperial",
+      dataType: "json",
+      success: function(data) {
+        $("#forecast").html("<h4 class=\"mt-3\">5-Day Forecast:</h4>").append("<div class=\"row\">");
+
+        for (let i = 0; i < data.list.length; i++) {
+          if (data.list[i].dt_txt.indexOf("15:00:00") !== -1) {
+            const col = $("<div>").addClass("col-md-2");
+            const card = $("<div>").addClass("card bg-primary text-white");
+            const body = $("<div>").addClass("card-body p-2");
+
+            const title = $("<h5>").addClass("card-title").text(new Date(data.list[i].dt_txt).toLocaleDateString());
+
+            const img = $("<img>").attr("src", "http://openweathermap.org/img/w/" + data.list[i].weather[0].icon + ".png");
+
+            const p1 = $("<p>").addClass("card-text").text("Temp: " + data.list[i].main.temp_max + " °F");
+            const p2 = $("<p>").addClass("card-text").text("Humidity: " + data.list[i].main.humidity + "%");
+
+            col.append(card.append(body.append(title, img, p1, p2)));
+            $("#forecast .row").append(col);
+          }
+        }
+      }
+    });
+  }
+
+  function getUVIndex(lat, lon) {
+    $.ajax({
+      type: "GET",
+      url: "http://api.openweathermap.org/data/2.5/uvi?appid=7ba67ac190f85fdba2e2dc6b9d32e93c&lat=" + lat + "&lon=" + lon,
+      dataType: "json",
+      success: function(data) {
+        const uv = $("<p>").text("UV Index: ");
+        const btn = $("<span>").addClass("btn btn-sm").text(data.value);
+        
+        if (data.value < 3) {
+          btn.addClass("btn-success");
+        }
+        else if (data.value < 7) {
+          btn.addClass("btn-warning");
+        }
+        else {
+          btn.addClass("btn-danger");
+        }
+        
+        $("#today .card-body").append(uv.append(btn));
+      }
+    });
+  }
+
+  const history = JSON.parse(window.localStorage.getItem("history")) || [];
+
+  if (history.length > 0) {
+    searchWeather(history[history.length-1]);
+  }
+
+  for (let i = 0; i < history.length; i++) {
+    makeRow(history[i]);
+  }
+});
